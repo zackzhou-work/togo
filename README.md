@@ -16,7 +16,7 @@ lands as you think of it. To start something, drag it up.
 
 - **One sheet of paper.** The whole window is a single warm off-white, so empty
   space reads as room rather than as something unfinished. The two sections are
-  told apart by a heading and a hairline and scroll together. Only the
+  told apart by their headings and scroll together. Only the
   completed-tasks popover and the row under the cursor during a drag leave that
   plane.
 - **One colour, one job.** Red means priority. Nothing else gets a hue.
