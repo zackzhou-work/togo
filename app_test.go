@@ -323,6 +323,29 @@ func TestDropIndicatorFollowsPointer(t *testing.T) {
 	}
 }
 
+// Over the row just below its own slot, a drop would change nothing, so no
+// marker promises a move.
+func TestNoDropIndicatorForNoOpMove(t *testing.T) {
+	h := newHarness(t, []string{"a", "b", "c"}, nil)
+	x, by := h.center("b")
+	_, cy := h.center("c")
+	h.tt.Press(x, by)
+	for y := by; y <= cy; y += 4 {
+		h.tt.Move(x, y)
+		h.tt.Frame()
+	}
+
+	// Where the rule would sit: the top edge of c, under b's slot.
+	rowTop := int(cy - rowHeight/2)
+	img := h.tt.Image()
+	for y := rowTop - 2; y <= rowTop+2; y++ {
+		if r, _, _, _ := img.At(200, y).RGBA(); r>>8 < 100 {
+			t.Fatalf("drop marker at y=%d for a drop that changes nothing", y)
+		}
+	}
+	h.tt.Release(x, cy)
+}
+
 func TestDragAcrossSections(t *testing.T) {
 	h := newHarness(t, []string{"a"}, []string{"x"})
 	h.tt.Press(h.center("x"))

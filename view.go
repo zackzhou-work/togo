@@ -61,7 +61,6 @@ func (a *app) view(c *ui.Context) {
 		body := ui.Scroll(c).Grow(1).MinHeight(0).TrackScroll(&a.scroll)
 		body.Children(func() {
 			a.section(c.Key("ongoing"), store.Ongoing, &later)
-			ui.Box(c).Height(1).Margin(0, gutter, 6, gutter).Background(colorHairline)
 			inbox := a.section(c.Key("inbox"), store.Inbox, &later)
 			// ⌘N brings the inbox to the top of the window, where the new
 			// field opens, however far down a long ongoing list pushed it.
@@ -156,15 +155,19 @@ func (a *app) section(c *ui.Context, column store.Column, later *[]func()) ui.El
 		if showDraft {
 			a.draftRow(c, later)
 		}
+		prevID := ""
 		for _, t := range tasks {
-			a.taskRow(c.Key(t.ID), t, column, later)
+			a.taskRow(c.Key(t.ID), t, prevID, column, later)
+			prevID = t.ID
 		}
 
 		tail := ui.Box(c).MinHeight(12).Center()
 		if d, ok := ui.Drop[dragged](tail); ok {
 			*later = append(*later, func() { a.reposition(d.id, column, "") })
 		}
-		_, over := ui.DragOver[dragged](tail)
+		d, over := ui.DragOver[dragged](tail)
+		// The last row is already where a drop here would put it.
+		over = over && d.id != prevID
 		tail.Children(func() {
 			if len(tasks) == 0 && !showDraft {
 				ui.Column(c).PaddingY(18).AlignItems(ui.Center).Gap(3).Children(func() {
@@ -197,7 +200,8 @@ func dropIndicator(c *ui.Context) {
 	})
 }
 
-func (a *app) taskRow(c *ui.Context, t store.Task, column store.Column, later *[]func()) {
+// taskRow is one task; prevID is the row above it in its list.
+func (a *app) taskRow(c *ui.Context, t store.Task, prevID string, column store.Column, later *[]func()) {
 	phase := a.completing[t.ID]
 	done := phase != 0
 	editing := a.editingID == t.ID
@@ -233,7 +237,11 @@ func (a *app) taskRow(c *ui.Context, t store.Task, column store.Column, later *[
 	if d, ok := ui.Drop[dragged](row); ok {
 		*later = append(*later, func() { a.reposition(d.id, column, t.ID) })
 	}
-	_, over := ui.DragOver[dragged](row)
+	d, over := ui.DragOver[dragged](row)
+	// Dropping onto itself or onto the row just below it leaves a row where it
+	// is, and the dashed slot already says so: a marker there would point at a
+	// move that does not happen.
+	over = over && d.id != t.ID && d.id != prevID
 
 	row.Children(func() {
 		// The grip and the title are one drag source: picking a row up anywhere
@@ -252,13 +260,22 @@ func (a *app) taskRow(c *ui.Context, t store.Task, column store.Column, later *[
 			}
 		}
 		grabbing := lead.Pressed()
+		// The copy that follows the pointer is drawn from the lead, ignoring
+		// its opacity: so the lead dresses as a lifted card and hides in place,
+		// and the row it leaves behind turns into a dashed slot.
+		lifting := lead.Dragging()
+		if lifting {
+			popoverShadow(lead.Opacity(0).Height(rowHeight).Padding(0, 10, 0, 6).Radius(rowRadius).
+				Background(colorRaised).Rotate(-0.8))
+			row.Background(ui.Transparent).Border(1, colorInkFaint).BorderStyle(ui.BorderDashed)
+		}
 		lead.Children(func() {
 			grip := ui.Box(c).Size(24, 28).Margin(0, -6).Center().Cursor(ui.CursorGrab)
 			if grabbing {
 				grip.Cursor(ui.CursorGrabbing)
 			}
 			grip.Children(func() {
-				if hovered {
+				if hovered || lifting {
 					ui.Icon(c, iconGrip).Size(16, 16).TextColor(colorInkFaint)
 				}
 			})
@@ -283,7 +300,7 @@ func (a *app) taskRow(c *ui.Context, t store.Task, column store.Column, later *[
 			})
 		})
 
-		if hovered && phase != leaving && !editing {
+		if hovered && phase != leaving && !editing && !lifting {
 			a.tray(c, t, done, armed)
 		}
 		if over {
